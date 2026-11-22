@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerSupabase, createServiceRoleClient } from "@/lib/supabase/server";
 import { calculatePuzzleScore, validatePuzzleSubmission } from "@/lib/puzzle-engine";
+import { fetchAccountFlags, isAdminRole } from "@/lib/admin";
 
 const SubmitSchema = z.object({
   puzzleId: z.string().uuid(),
@@ -21,6 +22,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const admin = createServiceRoleClient();
+
+    const { role, isBanned } = await fetchAccountFlags(admin, user.id);
+    if (isBanned) {
+      return NextResponse.json({ error: "This account has been suspended." }, { status: 403 });
+    }
+
+    // Admins have view-only access: they cannot attempt challenges.
+    if (isAdminRole(role)) {
+      return NextResponse.json(
+        { error: "Admin accounts have view-only access and cannot play challenges." },
+        { status: 403 }
+      );
+    }
+
     const body = await req.json();
     const parsed = SubmitSchema.safeParse(body);
     if (!parsed.success) {
@@ -28,7 +44,6 @@ export async function POST(req: Request) {
     }
 
     const { puzzleId, levelId, answer, elapsedSeconds } = parsed.data;
-    const admin = createServiceRoleClient();
 
     const [{ data: puzzle }, { data: answerRow }, { data: level }] = await Promise.all([
       admin.from("puzzles").select("*").eq("id", puzzleId).single(),

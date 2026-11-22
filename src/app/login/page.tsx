@@ -10,6 +10,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/dashboard";
+  const bannedNotice = searchParams.get("banned") === "1";
   const supabase = createClient();
 
   const [email, setEmail] = useState("");
@@ -58,6 +59,12 @@ function LoginForm() {
             <p className="text-xs text-slate-400">Sign in to continue your PuzzleQuest journey</p>
           </div>
         </div>
+
+        {bannedNotice && (
+          <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5 text-xs text-amber-200">
+            This account has been suspended. Contact an administrator to regain access.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

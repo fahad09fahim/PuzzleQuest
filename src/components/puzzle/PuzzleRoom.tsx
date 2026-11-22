@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Send,
   Sparkles,
+  Eye,
 } from "lucide-react";
 import type { Level, PlayerProgress, Puzzle, ScoreBreakdown } from "@/types/database";
 import { formatPuzzleCategory, formatSeconds, getDifficultyBadgeColor } from "@/lib/utils";
@@ -22,9 +23,17 @@ interface PuzzleRoomProps {
   puzzle: Puzzle;
   initialProgress: PlayerProgress;
   totalHintsCount: number;
+  /** Admins get view-only access: no submissions, hints, or resets. */
+  readOnly?: boolean;
 }
 
-export function PuzzleRoom({ level, puzzle, initialProgress, totalHintsCount }: PuzzleRoomProps) {
+export function PuzzleRoom({
+  level,
+  puzzle,
+  initialProgress,
+  totalHintsCount,
+  readOnly = false,
+}: PuzzleRoomProps) {
   const [answer, setAnswer] = useState("");
   const [elapsed, setElapsed] = useState(0);
   const [lives, setLives] = useState(initialProgress.lives_remaining ?? puzzle.max_lives);
@@ -48,10 +57,10 @@ export function PuzzleRoom({ level, puzzle, initialProgress, totalHintsCount }: 
   const [multiSteps, setMultiSteps] = useState<string[]>(["", "", ""]);
 
   useEffect(() => {
-    if (solvedData) return;
+    if (solvedData || readOnly) return;
     const timer = setInterval(() => setElapsed((prev) => prev + 1), 1000);
     return () => clearInterval(timer);
-  }, [solvedData]);
+  }, [solvedData, readOnly]);
 
   // Memory deck for memory puzzle
   const memoryDeck = useMemo(() => {
@@ -166,20 +175,29 @@ export function PuzzleRoom({ level, puzzle, initialProgress, totalHintsCount }: 
         </Link>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-xs font-semibold text-slate-200">
-            <Clock className="h-3.5 w-3.5 text-cyan-400" />
-            {formatSeconds(elapsed)}
-          </div>
-          <div className="flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-300">
-            {Array.from({ length: puzzle.max_lives }).map((_, idx) => (
-              <Heart
-                key={idx}
-                className={`h-3.5 w-3.5 ${
-                  idx < lives ? "fill-rose-400 text-rose-400" : "text-slate-600"
-                }`}
-              />
-            ))}
-          </div>
+          {readOnly ? (
+            <div className="flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-200">
+              <Eye className="h-3.5 w-3.5" />
+              Preview Mode
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-1 rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1 text-xs font-semibold text-slate-200">
+                <Clock className="h-3.5 w-3.5 text-cyan-400" />
+                {formatSeconds(elapsed)}
+              </div>
+              <div className="flex items-center gap-1 rounded-full border border-rose-500/30 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-300">
+                {Array.from({ length: puzzle.max_lives }).map((_, idx) => (
+                  <Heart
+                    key={idx}
+                    className={`h-3.5 w-3.5 ${
+                      idx < lives ? "fill-rose-400 text-rose-400" : "text-slate-600"
+                    }`}
+                  />
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -382,7 +400,17 @@ export function PuzzleRoom({ level, puzzle, initialProgress, totalHintsCount }: 
         )}
 
         {/* Answer Input & Actions */}
-        {!solvedData ? (
+        {readOnly ? (
+          <div className="mt-6 rounded-2xl border border-amber-500/35 bg-amber-500/10 p-5">
+            <div className="flex items-center gap-2 text-sm font-semibold text-amber-200">
+              <Eye className="h-4 w-4" /> View-only preview
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-amber-100/85">
+              Admin accounts cannot attempt challenges. Answer submission, hints, and chamber
+              resets are disabled — you are viewing this challenge as an observer.
+            </p>
+          </div>
+        ) : !solvedData ? (
           <div className="mt-6 space-y-4">
             {puzzle.puzzle_type !== "multi_step" && (
               <div>

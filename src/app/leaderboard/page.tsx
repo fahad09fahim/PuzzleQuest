@@ -3,9 +3,11 @@ import { Medal, Trophy } from "lucide-react";
 
 export default async function LeaderboardPage() {
   const supabase = createServerSupabase();
+  // Admins only view challenges — they never play, so they never rank here.
   const { data: leaders } = await supabase
     .from("profiles")
     .select("id, username, total_score, levels_completed")
+    .neq("role", "admin")
     .order("total_score", { ascending: false })
     .order("levels_completed", { ascending: false })
     .limit(25);

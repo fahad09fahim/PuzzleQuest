@@ -107,9 +107,16 @@ export function Navbar() {
           {user ? (
             <>
               {profile && (
-                <div className="hidden rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-200 sm:block">
-                  {profile.total_score} pts
-                </div>
+                profile.role === "admin" ? (
+                  <div className="hidden items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-200 sm:flex">
+                    <Shield className="h-3.5 w-3.5" />
+                    Admin
+                  </div>
+                ) : (
+                  <div className="hidden rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-200 sm:block">
+                    {profile.total_score} pts
+                  </div>
+                )
               )}
               <button
                 onClick={handleLogout}

@@ -37,6 +37,22 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Banned users are signed out and sent back to the login screen.
+  if (isProtected && user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_banned")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile?.is_banned) {
+      await supabase.auth.signOut();
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("banned", "1");
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
   return response;
 }
 

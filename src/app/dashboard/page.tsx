@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { Award, CheckCircle2, Compass, Lock, Play, Sparkles, Trophy } from "lucide-react";
+import { Award, CheckCircle2, Compass, Eye, Play, Trophy } from "lucide-react";
 import { getDifficultyBadgeColor } from "@/lib/utils";
 
 export default async function DashboardPage() {
@@ -25,6 +25,8 @@ export default async function DashboardPage() {
   const completedLevels = (progress || []).filter((p) => p.status === "completed").length;
   const nextUnlockedLevel =
     (levels || []).find((l) => progressMap.get(l.id)?.status === "unlocked") || (levels || [])[0];
+  // Admins have view-only access: they never play challenges.
+  const isAdmin = profile?.role === "admin";
 
   return (
     <div className="space-y-8">
@@ -37,13 +39,22 @@ export default async function DashboardPage() {
             Your expedition through the Astral Engine continues.
           </p>
         </div>
-        {nextUnlockedLevel && (
+        {nextUnlockedLevel && !isAdmin && (
           <Link
             href={`/levels/${nextUnlockedLevel.id}`}
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-600/25"
           >
             <Play className="h-4 w-4" />
             Continue Level {nextUnlockedLevel.level_number}: {nextUnlockedLevel.title}
+          </Link>
+        )}
+        {isAdmin && (
+          <Link
+            href="/chapters"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-600/25"
+          >
+            <Eye className="h-4 w-4" />
+            Preview Challenges
           </Link>
         )}
       </div>

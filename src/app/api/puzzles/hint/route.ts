@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerSupabase, createServiceRoleClient } from "@/lib/supabase/server";
+import { fetchAccountFlags, isAdminRole } from "@/lib/admin";
 
 const HintSchema = z.object({
   puzzleId: z.string().uuid(),
@@ -15,11 +16,25 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const admin = createServiceRoleClient();
+
+    const { role, isBanned } = await fetchAccountFlags(admin, user.id);
+    if (isBanned) {
+      return NextResponse.json({ error: "This account has been suspended." }, { status: 403 });
+    }
+
+    // Admins have view-only access: hints are part of playing the challenge.
+    if (isAdminRole(role)) {
+      return NextResponse.json(
+        { error: "Admin accounts have view-only access and cannot reveal hints." },
+        { status: 403 }
+      );
+    }
+
     const parsed = HintSchema.safeParse(await req.json());
     if (!parsed.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 
     const { puzzleId, levelId } = parsed.data;
-    const admin = createServiceRoleClient();
 
     const [{ data: hints }, { data: progress }] = await Promise.all([
       admin
