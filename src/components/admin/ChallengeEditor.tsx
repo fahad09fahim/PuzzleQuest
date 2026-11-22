@@ -29,6 +29,8 @@ interface FormState {
   canonicalAnswer: string;
   explanation: string;
   hint1: string;
+  /** Newline-separated answer options (multiple_choice only). */
+  options: string;
 }
 
 const PUZZLE_TYPES = [
@@ -44,10 +46,20 @@ const PUZZLE_TYPES = [
   "memory",
   "hidden_clues",
   "multi_step",
+  "terminal",
 ];
 
 const inputCls =
   "w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white";
+
+/** Reads config.options back into the editor textarea (strings or objects). */
+function optionsToText(config: any): string {
+  const list = Array.isArray(config?.options) ? config.options : [];
+  return list
+    .map((o: any) => (typeof o === "string" ? o : String(o?.label ?? o?.id ?? "")))
+    .filter(Boolean)
+    .join("\n");
+}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -88,6 +100,7 @@ function ChallengeModal({ mode, chapters, levelId, initial, onClose, onSaved }: 
       canonicalAnswer: "",
       explanation: "",
       hint1: "",
+      options: "",
     }
   );
   const [saving, setSaving] = useState(false);
@@ -103,10 +116,27 @@ function ChallengeModal({ mode, chapters, levelId, initial, onClose, onSaved }: 
     setError(null);
 
     try {
+      const parsedOptions = form.options
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+      if (form.puzzleType === "multiple_choice" && parsedOptions.length < 2) {
+        setError("Multiple-choice challenges need at least 2 answer options (one per line).");
+        setSaving(false);
+        return;
+      }
+
+      const payload: Record<string, any> = {
+        ...(mode === "add" ? form : { levelId, ...form }),
+      };
+      delete payload.options;
+      if (form.puzzleType === "multiple_choice") payload.options = parsedOptions;
+
       const res = await fetch("/api/admin/puzzles", {
         method: mode === "add" ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mode === "add" ? form : { levelId, ...form }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -300,6 +330,23 @@ function ChallengeModal({ mode, chapters, levelId, initial, onClose, onSaved }: 
             />
           </Field>
 
+          {form.puzzleType === "multiple_choice" && (
+            <Field label="Answer Options (one per line, 2 minimum)">
+              <textarea
+                required
+                rows={4}
+                value={form.options}
+                onChange={(e) => set("options", e.target.value)}
+                placeholder={"O(n)\nO(n log n)\nO(n^2)\nO(log n)"}
+                className={`${inputCls} font-mono`}
+              />
+              <p className="mt-1 text-[11px] text-slate-500">
+                Players click these buttons. The Canonical Answer below must match one option
+                exactly (case-insensitive).
+              </p>
+            </Field>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Validation Mode">
               <select
@@ -311,6 +358,7 @@ function ChallengeModal({ mode, chapters, levelId, initial, onClose, onSaved }: 
                 <option value="numeric">Numeric</option>
                 <option value="json_steps">JSON Steps</option>
                 <option value="memory_token">Memory Token</option>
+                <option value="keywords">Keywords (all groups)</option>
               </select>
             </Field>
             <Field label="Base Points">
@@ -440,6 +488,7 @@ export function AddChallengeButton({
             canonicalAnswer: "",
             explanation: "",
             hint1: "",
+            options: "",
           }}
           onClose={() => setOpen(false)}
           onSaved={() => {}}
@@ -502,6 +551,7 @@ export function EditChallengeButton({
       canonicalAnswer: answer?.canonical_answer ?? "",
       explanation: answer?.explanation ?? "",
       hint1,
+      options: optionsToText(puzzle?.config),
     });
     setLoading(false);
     setOpen(true);

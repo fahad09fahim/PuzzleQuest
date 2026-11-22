@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createServerSupabase, createServiceRoleClient } from "@/lib/supabase/server";
 import { fetchAccountFlags, isAdminRole } from "@/lib/admin";
+import { isPreviousChapterCleared } from "@/lib/chapters";
 import { PuzzleRoom } from "@/components/puzzle/PuzzleRoom";
 import type { PlayerProgress } from "@/types/database";
 
@@ -24,6 +25,21 @@ export default async function LevelPage({ params }: { params: { id: string } }) 
 
   const isAdmin = isAdminRole(flags.role);
 
+  // Hidden chapters (The Critical Terminal) only open once the previous
+  // chapter has been fully cleared.
+  if (!isAdmin) {
+    const { data: chapter } = await admin
+      .from("chapters")
+      .select("*")
+      .eq("id", level.chapter_id)
+      .maybeSingle();
+
+    if (chapter?.is_hidden) {
+      const cleared = await isPreviousChapterCleared(admin, user.id, chapter.chapter_number);
+      if (!cleared) redirect("/chapters");
+    }
+  }
+
   let { data: progress } = await admin
     .from("player_progress")
     .select("*")
@@ -32,18 +48,43 @@ export default async function LevelPage({ params }: { params: { id: string } }) 
     .maybeSingle();
 
   // Admins never play challenges: no progress rows are created for them.
-  if (!progress && !isAdmin && level.level_number === 1) {
-    const { data: created } = await admin
-      .from("player_progress")
-      .insert({
-        user_id: user.id,
-        level_id: level.id,
-        status: "unlocked",
-        lives_remaining: puzzle.max_lives,
-      })
-      .select()
-      .single();
-    progress = created;
+  // Otherwise create the row when the player has genuinely earned it: either
+  // this is the first level, or the preceding level is already completed.
+  // (Covers players who cleared Chapter 4 before Chapter 5 existed.)
+  if (!progress && !isAdmin) {
+    let shouldUnlock = level.level_number === 1;
+
+    if (!shouldUnlock) {
+      const { data: previousLevel } = await admin
+        .from("levels")
+        .select("id")
+        .eq("level_number", level.level_number - 1)
+        .maybeSingle();
+
+      if (previousLevel) {
+        const { data: previousProgress } = await admin
+          .from("player_progress")
+          .select("status")
+          .eq("user_id", user.id)
+          .eq("level_id", previousLevel.id)
+          .maybeSingle();
+        shouldUnlock = previousProgress?.status === "completed";
+      }
+    }
+
+    if (shouldUnlock) {
+      const { data: created } = await admin
+        .from("player_progress")
+        .insert({
+          user_id: user.id,
+          level_id: level.id,
+          status: "unlocked",
+          lives_remaining: puzzle.max_lives,
+        })
+        .select()
+        .single();
+      progress = created;
+    }
   }
 
   // Admins can preview every challenge (view-only), even locked ones.

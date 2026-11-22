@@ -246,6 +246,18 @@ export async function POST(req: Request) {
         qualifies = true;
       }
       if (ach.slug === "puzzle_legend" && completedCount >= 12) qualifies = true;
+      if (ach.slug === "master_thinker") {
+        // Awarded when every terminal challenge (The Critical Terminal) is cleared.
+        const { data: terminalPuzzles } = await admin
+          .from("puzzles")
+          .select("level_id")
+          .eq("puzzle_type", "terminal");
+        const terminalIds = new Set((terminalPuzzles || []).map((p: any) => p.level_id));
+        const completedIds = new Set((allCompleted || []).map((c) => c.level_id));
+        if (terminalIds.size > 0 && Array.from(terminalIds).every((id) => completedIds.has(id))) {
+          qualifies = true;
+        }
+      }
       if (ach.slug === "chapter_master") {
         const { data: chapterLevels } = await admin
           .from("levels")

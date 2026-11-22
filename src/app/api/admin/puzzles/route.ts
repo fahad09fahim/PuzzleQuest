@@ -17,7 +17,7 @@ const CreatePuzzleSchema = z.object({
   basePoints: z.number().int().min(10).max(2000),
   maxLives: z.number().int().min(1).max(10),
   canonicalAnswer: z.string().min(1),
-  validationMode: z.enum(["exact_insensitive", "numeric", "json_steps", "memory_token"]),
+  validationMode: z.enum(["exact_insensitive", "numeric", "json_steps", "memory_token", "keywords"]),
   explanation: z.string().min(2),
   hint1: z.string().optional(),
 });
@@ -119,7 +119,7 @@ const UpdateChallengeSchema = z.object({
   basePoints: z.number().int().min(10).max(2000).optional(),
   maxLives: z.number().int().min(1).max(10).optional(),
   canonicalAnswer: z.string().min(1).optional(),
-  validationMode: z.enum(["exact_insensitive", "numeric", "json_steps", "memory_token"]).optional(),
+  validationMode: z.enum(["exact_insensitive", "numeric", "json_steps", "memory_token", "keywords"]).optional(),
   explanation: z.string().min(2).optional(),
   hint1: z.string().optional(),
 });

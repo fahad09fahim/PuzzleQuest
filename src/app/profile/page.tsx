@@ -9,10 +9,16 @@ export default async function ProfilePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: allAchievements }, { data: unlocked }] = await Promise.all([
+  const [
+    { data: profile },
+    { data: allAchievements },
+    { data: unlocked },
+    { count: totalLevels },
+  ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),
     supabase.from("achievements").select("*").order("points_reward"),
     supabase.from("user_achievements").select("achievement_id, unlocked_at").eq("user_id", user.id),
+    supabase.from("levels").select("id", { count: "exact", head: true }),
   ]);
 
   const unlockedMap = new Map((unlocked || []).map((u) => [u.achievement_id, u.unlocked_at]));
@@ -40,7 +46,7 @@ export default async function ProfilePage() {
           <div>
             <div className="text-xs text-slate-400">Levels Solved</div>
             <div className="text-2xl font-extrabold text-emerald-300">
-              {profile?.levels_completed ?? 0} / 12
+              {profile?.levels_completed ?? 0} / {totalLevels ?? 12}
             </div>
           </div>
         </div>

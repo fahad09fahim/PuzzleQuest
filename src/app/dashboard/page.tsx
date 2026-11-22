@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { Award, CheckCircle2, Compass, Eye, Play, Trophy } from "lucide-react";
 import { getDifficultyBadgeColor } from "@/lib/utils";
+import { effectiveLevelStatus, isChapterUnlocked } from "@/lib/chapters";
 
 export default async function DashboardPage() {
   const supabase = createServerSupabase();
@@ -11,22 +12,40 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, { data: chapters }, { data: levels }, { data: progress }, { data: userAch }] =
+  const [{ data: profile }, { data: chapters }, { data: levels }, { data: progress }, { data: userAch }, { count: achievementCount }] =
     await Promise.all([
       supabase.from("profiles").select("*").eq("id", user.id).single(),
       supabase.from("chapters").select("*").order("chapter_number"),
       supabase.from("levels").select("*").order("level_number"),
       supabase.from("player_progress").select("*").eq("user_id", user.id),
       supabase.from("user_achievements").select("*, achievements(*)").eq("user_id", user.id),
+      supabase.from("achievements").select("id", { count: "exact", head: true }),
     ]);
 
   const progressMap = new Map((progress || []).map((p) => [p.level_id, p]));
-  const totalLevels = levels?.length || 12;
   const completedLevels = (progress || []).filter((p) => p.status === "completed").length;
-  const nextUnlockedLevel =
-    (levels || []).find((l) => progressMap.get(l.id)?.status === "unlocked") || (levels || [])[0];
   // Admins have view-only access: they never play challenges.
   const isAdmin = profile?.role === "admin";
+
+  // Hidden chapters stay out of the dashboard until the previous chapter is cleared.
+  const unlockCtx = {
+    chapters: (chapters || []) as any[],
+    levels: (levels || []) as any[],
+    progressMap,
+    isAdmin,
+  };
+  const shownChapters = (chapters || []).filter((c) => isChapterUnlocked(c as any, unlockCtx));
+  const playableLevels = (levels || []).filter((l) =>
+    shownChapters.some((c) => c.id === l.chapter_id)
+  );
+
+  // Only count levels the player can actually see, so hidden chapters never
+  // leak into the "CHAMBERS SOLVED" total before they are revealed.
+  const totalLevels = playableLevels.length || 12;
+
+  const nextUnlockedLevel =
+    playableLevels.find((l) => effectiveLevelStatus(l, levels || [], progressMap) === "unlocked") ||
+    playableLevels[0];
 
   return (
     <div className="space-y-8">
@@ -81,7 +100,7 @@ export default async function DashboardPage() {
             <span>ACHIEVEMENTS</span>
             <Award className="h-4 w-4 text-violet-400" />
           </div>
-          <div className="mt-2 text-3xl font-extrabold text-white">{userAch?.length ?? 0} / 6</div>
+          <div className="mt-2 text-3xl font-extrabold text-white">{userAch?.length ?? 0} / {achievementCount ?? 6}</div>
         </div>
       </div>
 
@@ -93,7 +112,7 @@ export default async function DashboardPage() {
           </Link>
         </div>
         <div className="grid gap-5 md:grid-cols-2">
-          {(chapters || []).map((chapter) => {
+          {shownChapters.map((chapter) => {
             const chapterLevels = (levels || []).filter((l) => l.chapter_id === chapter.id);
             const solvedInChapter = chapterLevels.filter(
               (l) => progressMap.get(l.id)?.status === "completed"

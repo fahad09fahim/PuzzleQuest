@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { Level, PlayerProgress, Puzzle, ScoreBreakdown } from "@/types/database";
 import { formatPuzzleCategory, formatSeconds, getDifficultyBadgeColor } from "@/lib/utils";
+import { TerminalRoom } from "@/components/puzzle/TerminalRoom";
 
 interface PuzzleRoomProps {
   level: Level;
@@ -55,6 +56,23 @@ export function PuzzleRoom({
   const [matchedIds, setMatchedIds] = useState<string[]>([]);
   const [inspectedHotspots, setInspectedHotspots] = useState<Record<string, string>>({});
   const [multiSteps, setMultiSteps] = useState<string[]>(["", "", ""]);
+
+  // Multiple-choice / pattern puzzles render clickable options. They may be
+  // stored either as plain strings or as { id, label } objects, so normalise
+  // both shapes before rendering.
+  const isChoicePuzzle =
+    puzzle.puzzle_type === "multiple_choice" || puzzle.puzzle_type === "pattern";
+  const rawChoices: any[] = Array.isArray(puzzle.config?.options)
+    ? puzzle.config.options
+    : Array.isArray(puzzle.config?.choices)
+    ? puzzle.config.choices
+    : [];
+  const choiceButtons = rawChoices.map((raw, idx) =>
+    typeof raw === "string"
+      ? { id: raw, label: raw }
+      : { id: String((raw as any)?.id ?? idx), label: String((raw as any)?.label ?? (raw as any)?.id ?? "") }
+  );
+  const hasChoiceButtons = isChoicePuzzle && choiceButtons.length > 0;
 
   useEffect(() => {
     if (solvedData || readOnly) return;
@@ -128,11 +146,13 @@ export function PuzzleRoom({
     }
   }
 
-  async function handleSubmit(overrideAnswer?: string) {
+  async function handleSubmit(
+    overrideAnswer?: string
+  ): Promise<{ ok: boolean; message?: string }> {
     const finalAnswer =
       overrideAnswer ??
       (puzzle.puzzle_type === "multi_step" ? JSON.stringify(multiSteps) : answer);
-    if (!finalAnswer.trim()) return;
+    if (!finalAnswer.trim()) return { ok: false, message: "Enter a solution first." };
 
     setSubmitting(true);
     setFeedback(null);
@@ -151,17 +171,19 @@ export function PuzzleRoom({
     setSubmitting(false);
 
     if (!res.ok) {
-      setFeedback(data.error || "Submission failed");
-      return;
+      const message = data.error || "Submission failed";
+      setFeedback(message);
+      return { ok: false, message };
     }
 
     if (!data.correct) {
       setLives(data.livesRemaining);
       setFeedback(data.message);
-      return;
+      return { ok: false, message: data.message };
     }
 
     setSolvedData(data);
+    return { ok: true };
   }
 
   return (
@@ -334,22 +356,37 @@ export function PuzzleRoom({
                 ))}
               </div>
             )}
-            <div className="grid gap-2.5 sm:grid-cols-2">
-              {(puzzle.config?.options || puzzle.config?.choices || []).map((opt: any) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setAnswer(opt.id)}
-                  className={`rounded-xl border px-4 py-3 text-left text-sm font-medium transition ${
-                    answer === opt.id
-                      ? "border-cyan-400 bg-cyan-500/20 text-white"
-                      : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-slate-500"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            {hasChoiceButtons && (
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {choiceButtons.map((choice, idx) => {
+                  const selected = answer === choice.id;
+                  return (
+                    <button
+                      key={`${idx}-${choice.id}`}
+                      type="button"
+                      onClick={() => setAnswer(choice.id)}
+                      aria-pressed={selected}
+                      className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition ${
+                        selected
+                          ? "border-cyan-400 bg-cyan-500/20 text-white"
+                          : "border-slate-700 bg-slate-900/70 text-slate-300 hover:border-slate-500"
+                      }`}
+                    >
+                      <span
+                        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border font-mono text-[11px] font-bold ${
+                          selected
+                            ? "border-cyan-300 bg-cyan-400/20 text-cyan-200"
+                            : "border-slate-600 text-slate-400"
+                        }`}
+                      >
+                        {String.fromCharCode(65 + idx)}
+                      </span>
+                      <span className="min-w-0 break-words">{choice.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -412,7 +449,22 @@ export function PuzzleRoom({
           </div>
         ) : !solvedData ? (
           <div className="mt-6 space-y-4">
-            {puzzle.puzzle_type !== "multi_step" && (
+            {puzzle.puzzle_type === "terminal" ? (
+              <TerminalRoom
+                level={level}
+                puzzle={puzzle}
+                lives={lives}
+                hints={hints}
+                hintsRevealedCount={hintsRevealedCount}
+                totalHintsCount={totalHintsCount}
+                submitting={submitting}
+                onSubmit={handleSubmit}
+                onRequestHint={handleRequestHint}
+                onReset={handleResetChamber}
+              />
+            ) : (
+              <>
+                {puzzle.puzzle_type !== "multi_step" && !hasChoiceButtons && (
               <div>
                 <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
                   Your Solution
@@ -476,6 +528,8 @@ export function PuzzleRoom({
                 ))}
               </div>
             )}
+              </>
+            )}
           </div>
         ) : (
           <div className="mt-6 space-y-5 rounded-2xl border border-emerald-500/35 bg-emerald-950/20 p-6">
@@ -483,6 +537,26 @@ export function PuzzleRoom({
               <CheckCircle2 className="h-6 w-6" />
               Chamber Unlocked! +{solvedData.scoreBreakdown.totalPoints} Points
             </div>
+
+            {puzzle.puzzle_type === "terminal" && (
+              <pre className="overflow-x-auto rounded-xl border border-emerald-500/30 bg-black/70 p-4 font-mono text-[11px] leading-relaxed text-emerald-300 sm:text-xs">
+                {`====================================
+       MISSION COMPLETED
+====================================
+
+ACCESS GRANTED!
+
+You successfully completed all
+critical thinking challenges.
+
+Your reasoning skills have been tested.${
+  solvedData.newlyUnlockedAchievements?.some((a: any) => a.slug === "master_thinker")
+    ? "\n\nNEW ACHIEVEMENT UNLOCKED:\n     MASTER THINKER"
+    : ""
+}`}
+              </pre>
+            )}
+
             <p className="text-sm leading-relaxed text-slate-200">{solvedData.explanation}</p>
 
             <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-950/70 p-4 text-xs sm:grid-cols-4">

@@ -4,13 +4,16 @@ import { Medal, Trophy } from "lucide-react";
 export default async function LeaderboardPage() {
   const supabase = createServerSupabase();
   // Admins only view challenges — they never play, so they never rank here.
-  const { data: leaders } = await supabase
-    .from("profiles")
-    .select("id, username, total_score, levels_completed")
-    .neq("role", "admin")
-    .order("total_score", { ascending: false })
-    .order("levels_completed", { ascending: false })
-    .limit(25);
+  const [{ data: leaders }, { count: totalLevels }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, username, total_score, levels_completed")
+      .neq("role", "admin")
+      .order("total_score", { ascending: false })
+      .order("levels_completed", { ascending: false })
+      .limit(25),
+    supabase.from("levels").select("id", { count: "exact", head: true }),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -47,7 +50,7 @@ export default async function LeaderboardPage() {
                   )}
                 </td>
                 <td className="px-5 py-4 font-semibold text-white">{player.username}</td>
-                <td className="px-5 py-4 text-slate-300">{player.levels_completed} / 12</td>
+                <td className="px-5 py-4 text-slate-300">{player.levels_completed} / {totalLevels ?? 12}</td>
                 <td className="px-5 py-4 text-right font-bold text-cyan-300">
                   {player.total_score} pts
                 </td>

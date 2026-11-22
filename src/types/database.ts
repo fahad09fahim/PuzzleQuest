@@ -11,9 +11,15 @@ export type PuzzleCategory =
   | "substitution_cipher"
   | "memory"
   | "hidden_clues"
-  | "multi_step";
+  | "multi_step"
+  | "terminal";
 export type ProgressStatus = "locked" | "unlocked" | "completed";
-export type ValidationMode = "exact_insensitive" | "numeric" | "json_steps" | "memory_token";
+export type ValidationMode =
+  | "exact_insensitive"
+  | "numeric"
+  | "json_steps"
+  | "memory_token"
+  | "keywords";
 
 export interface Profile {
   id: string;
@@ -39,6 +45,8 @@ export interface Chapter {
   reward_title: string;
   reward_description: string;
   is_published: boolean;
+  /** Hidden chapters only appear once the previous chapter is fully cleared. */
+  is_hidden?: boolean;
 }
 
 export interface Level {

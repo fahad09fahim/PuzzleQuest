@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { CheckCircle2, Eye, Lock, Play, Sparkles } from "lucide-react";
 import { formatPuzzleCategory, getDifficultyBadgeColor } from "@/lib/utils";
+import { effectiveLevelStatus, isChapterUnlocked } from "@/lib/chapters";
 import { AddChallengeButton, EditChallengeButton } from "@/components/admin/ChallengeEditor";
 
 export default async function ChaptersPage() {
@@ -27,6 +28,16 @@ export default async function ChaptersPage() {
   const progressMap = new Map((progress || []).map((p) => [p.level_id, p]));
   const puzzleByLevel = new Map((puzzles || []).map((pz) => [pz.level_id, pz]));
 
+  // Hidden chapters (e.g. The Critical Terminal) stay invisible until the
+  // previous chapter is fully cleared — admins always see them.
+  const unlockCtx = {
+    chapters: (chapters || []) as any[],
+    levels: (levels || []) as any[],
+    progressMap,
+    isAdmin,
+  };
+  const shownChapters = (chapters || []).filter((c) => isChapterUnlocked(c as any, unlockCtx));
+
   return (
     <div className="space-y-10">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -44,7 +55,7 @@ export default async function ChaptersPage() {
         )}
       </div>
 
-      {(chapters || []).map((chapter) => {
+      {shownChapters.map((chapter) => {
         const chapterLevels = (levels || []).filter((l) => l.chapter_id === chapter.id);
         return (
           <section key={chapter.id} className="glass-panel rounded-3xl p-6 sm:p-8">
@@ -68,8 +79,7 @@ export default async function ChaptersPage() {
 
             <div className="mt-6 grid gap-4 md:grid-cols-3">
               {chapterLevels.map((level) => {
-                const prog = progressMap.get(level.id);
-                const status = prog?.status || (level.level_number === 1 ? "unlocked" : "locked");
+                const status = effectiveLevelStatus(level, levels || [], progressMap);
                 const pz = puzzleByLevel.get(level.id);
                 const isLocked = status === "locked" && !isAdmin;
 

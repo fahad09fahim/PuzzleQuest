@@ -42,6 +42,22 @@ export function validatePuzzleSubmission(params: {
     }
   }
 
+  // Keyword-group validation: every group in accepted_variations must be
+  // satisfied by at least one of its pipe-separated alternatives.
+  // e.g. ["unauthorized|illegal|suspicious", "export|10:07"]
+  if (validationMode === "keywords") {
+    const normalizedSubmission = normalizeText(raw);
+    const groups = Array.isArray(acceptedVariations) ? acceptedVariations : [];
+    if (groups.length === 0) {
+      return normalizedSubmission === normalizeText(canonicalAnswer);
+    }
+    return groups.every((group) => {
+      const alternatives = String(group).split("|").map(normalizeText).filter(Boolean);
+      if (alternatives.length === 0) return false;
+      return alternatives.some((alt) => normalizedSubmission.includes(alt));
+    });
+  }
+
   const normalizedSubmission = normalizeText(raw);
   const candidates = [canonicalAnswer, ...acceptedVariations].map((v) => normalizeText(String(v)));
   return candidates.includes(normalizedSubmission);
