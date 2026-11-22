@@ -16,7 +16,7 @@ export interface AccountFlags {
  */
 export async function fetchAccountFlags(
   admin: ServiceClient,
-  userId: string
+  userId: string,
 ): Promise<AccountFlags> {
   const { data } = await admin
     .from("profiles")
