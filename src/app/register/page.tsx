@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +15,21 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Already signed in? Skip the registration form entirely.
+  useEffect(() => {
+    let mounted = true;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (mounted && user) {
+        router.replace("/dashboard");
+        router.refresh();
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
